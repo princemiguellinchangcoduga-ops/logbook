@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Record Logbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="page">
+
+  <header class="ledger-header">
+    <div class="header-text">
+      <p class="eyebrow">Register &middot; Volume I</p>
+      <h1>Digital Record Logbook</h1>
+      <p class="subtitle">Dates, transactions, and the hand that filed them.</p>
+    </div>
+    <div class="header-actions">
+      <span id="modeBadge" class="stamp">View Only</span>
+      <button id="loginBtn" class="btn btn-outline">Admin Login</button>
+      <button id="logoutBtn" class="btn btn-outline hidden">Log Out</button>
+    </div>
+  </header>
+
+  <main class="ledger-book">
+    <div class="ledger-margin"></div>
+
+    <div class="ledger-content">
+
+      <section id="addSection" class="add-section hidden">
+        <h2>New Entry</h2>
+        <form id="addForm" class="entry-form">
+          <div class="field">
+            <label for="newDate">Date</label>
+            <input type="date" id="newDate" required>
+          </div>
+          <div class="field field-grow">
+            <label for="newTransaction">Transaction</label>
+            <input type="text" id="newTransaction" placeholder="e.g. Released 3 boxes of file folders" required>
+          </div>
+          <div class="field">
+            <label for="newFiledBy">Filed by</label>
+            <input type="text" id="newFiledBy" placeholder="e.g. J. Santos" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Entry</button>
+        </form>
+      </section>
+
+      <section class="table-section">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-date">Date</th>
+                <th class="col-transaction">Transaction</th>
+                <th class="col-filer">Filed By</th>
+                <th class="col-actions admin-only hidden">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <p id="emptyState" class="empty-state hidden">No entries yet. The page is blank, waiting for the first record.</p>
+        <p id="statusMsg" class="status-msg" role="status"></p>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="ledger-footer">
+    <p>Entries are visible to everyone. Adding, editing, or removing a record requires an admin login.</p>
+  </footer>
+
+</div>
+
+<!-- Login modal -->
+<div id="loginModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-labelledby="loginTitle" aria-modal="true">
+    <button id="closeModalBtn" class="modal-close" aria-label="Close">&times;</button>
+    <h2 id="loginTitle">Admin Login</h2>
+    <p class="modal-subtitle">Sign in to add, edit, or delete entries.</p>
+    <form id="loginForm" class="login-form">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+      </div>
+      <p id="loginError" class="login-error" role="alert"></p>
+      <button type="submit" class="btn btn-primary btn-full">Log In</button>
+    </form>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

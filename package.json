@@ -1,0 +1,12 @@
+{
+  "name": "digital-record-logbook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A simple digital logbook with public view mode and admin-only add/edit/delete, backed by Postgres on Vercel.",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "pg": "^8.11.5"
+  }
+}
