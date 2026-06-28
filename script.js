@@ -33,12 +33,24 @@ function setStatus(msg, isError) {
 function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
-function toInputDate(value) {
-  // value may already be an ISO date or a full timestamp; normalize to YYYY-MM-DD
-  return String(value).slice(0, 10);
+function toDatetimeInputValue(d = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toEditDatetimeValue(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return toDatetimeInputValue(d);
 }
 
 function escapeHtml(str) {
@@ -124,7 +136,7 @@ function startEdit(tr, id) {
   if (!record) return;
 
   tr.innerHTML = `
-    <td><input type="date" class="edit-date" value="${toInputDate(record.log_date)}"></td>
+    <td><input type="datetime-local" class="edit-date" value="${toEditDatetimeValue(record.log_date)}"></td>
     <td><input type="text" class="edit-transaction" value="${escapeAttr(record.transaction)}"></td>
     <td><input type="text" class="edit-filer" value="${escapeAttr(record.filed_by)}"></td>
     <td class="cell-actions">
@@ -231,7 +243,7 @@ els.exportBtn.addEventListener('click', () => {
     return;
   }
   const rows = records.map((r) => ({
-    Date: formatDate(r.log_date),
+    'Date & Time': formatDate(r.log_date),
     Transaction: r.transaction,
     'Filed By': r.filed_by,
   }));
@@ -267,7 +279,7 @@ els.addForm.addEventListener('submit', async (e) => {
     if (!res.ok) throw new Error(data.error || 'Failed to add entry');
 
     els.addForm.reset();
-    els.newDate.value = new Date().toISOString().slice(0, 10);
+    els.newDate.value = toDatetimeInputValue();
     setStatus('Entry added.');
     await fetchRecords();
   } catch (err) {
@@ -289,6 +301,6 @@ els.tableBody.addEventListener('click', (e) => {
 });
 
 // --- Init ---
-els.newDate.value = new Date().toISOString().slice(0, 10);
+els.newDate.value = toDatetimeInputValue();
 updateModeUI();
 fetchRecords();

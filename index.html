@@ -15,7 +15,7 @@
 
   <header class="ledger-header">
     <div class="header-text">
-      <p class="eyebrow">NISU Estancia &middot; Registrar</p>
+      <p class="eyebrow">Register &middot; Volume I</p>
       <h1>Digital Record Logbook</h1>
       <p class="subtitle">Dates, transactions, and the hand that filed them.</p>
     </div>
@@ -36,8 +36,8 @@
         <h2>New Entry</h2>
         <form id="addForm" class="entry-form">
           <div class="field">
-            <label for="newDate">Date</label>
-            <input type="date" id="newDate" required>
+            <label for="newDate">Date &amp; Time</label>
+            <input type="datetime-local" id="newDate" required>
           </div>
           <div class="field field-grow">
             <label for="newTransaction">Transaction</label>
@@ -56,7 +56,7 @@
           <table>
             <thead>
               <tr>
-                <th class="col-date">Date</th>
+                <th class="col-date">Date &amp; Time</th>
                 <th class="col-transaction">Transaction</th>
                 <th class="col-filer">Filed By</th>
                 <th class="col-actions admin-only hidden">Actions</th>
