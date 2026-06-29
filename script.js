@@ -28,6 +28,11 @@ const els = {
   searchInput: document.getElementById('searchInput'),
   pagination: document.getElementById('pagination'),
   storageWarning: document.getElementById('storageWarning'),
+  storageWidget: document.getElementById('storageWidget'),
+  storageBarFill: document.getElementById('storageBarFill'),
+  storageWidgetKb: document.getElementById('storageWidgetKb'),
+  storageWidgetPercent: document.getElementById('storageWidgetPercent'),
+  storageWidgetLimit: document.getElementById('storageWidgetLimit'),
 };
 
 function isAdmin() {
@@ -107,27 +112,33 @@ function forceLogout(message) {
 }
 
 function renderStorageWarning(storage) {
+  // Hide old banner always — we use the widget instead
+  els.storageWarning.classList.add('hidden');
+
   if (!storage || !storage.limitBytes) {
-    els.storageWarning.classList.add('hidden');
+    els.storageWidget.classList.add('hidden');
     return;
   }
+
   const percent = storage.percent;
-  const usedMb = (storage.bytes / (1024 * 1024)).toFixed(1);
+  const usedKb = (storage.bytes / 1024).toFixed(1);
+  const limitKb = (storage.limitBytes / 1024).toFixed(0);
+  const remainKb = ((storage.limitBytes - storage.bytes) / 1024).toFixed(1);
   const limitMb = Math.round(storage.limitBytes / (1024 * 1024));
 
-  if (percent >= 90) {
-    els.storageWarning.textContent =
-      `Database storage is at ${percent.toFixed(0)}% (${usedMb} MB of ${limitMb} MB). ` +
-      `You're close to the limit — consider exporting and archiving older entries soon.`;
-    els.storageWarning.classList.remove('hidden');
-    els.storageWarning.classList.add('warning-danger');
-  } else if (percent >= 75) {
-    els.storageWarning.textContent =
-      `Heads up: database storage is at ${percent.toFixed(0)}% (${usedMb} MB of ${limitMb} MB).`;
-    els.storageWarning.classList.remove('hidden', 'warning-danger');
-  } else {
-    els.storageWarning.classList.add('hidden');
-  }
+  // Show widget
+  els.storageWidget.classList.remove('hidden');
+
+  // Bar fill + color
+  els.storageBarFill.style.width = `${Math.min(percent, 100).toFixed(1)}%`;
+  els.storageBarFill.classList.remove('warn', 'danger');
+  if (percent >= 90) els.storageBarFill.classList.add('danger');
+  else if (percent >= 75) els.storageBarFill.classList.add('warn');
+
+  // Labels
+  els.storageWidgetKb.textContent = `${usedKb} KB used`;
+  els.storageWidgetPercent.textContent = `${percent.toFixed(1)}%`;
+  els.storageWidgetLimit.textContent = `${remainKb} KB left`;
 }
 
 async function fetchRecords() {
@@ -170,13 +181,13 @@ function renderTable() {
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
     tr.innerHTML = `
-      <td class="cell-date">${formatDate(r.log_date)}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.control_no)}</td>
+      <td class="cell-date cell-mono">${formatDate(r.log_date)}</td>
+      <td class="cell-name">${escapeHtml(r.name)}</td>
+      <td class="cell-mono">${escapeHtml(r.control_no)}</td>
       <td>${escapeHtml(r.course)}</td>
       <td>${escapeHtml(r.documents_released)}</td>
       <td>${escapeHtml(r.purpose)}</td>
-      <td>${escapeHtml(r.receipt_no)}</td>
+      <td class="cell-mono">${escapeHtml(r.receipt_no)}</td>
       <td class="cell-amount">${formatAmount(r.amount)}</td>
       ${isAdmin() ? `
       <td class="cell-actions">

@@ -87,11 +87,11 @@
               <tr>
                 <th class="col-date">Date &amp; Time</th>
                 <th class="col-name">Name</th>
-                <th class="col-control">Control Number</th>
+                <th class="col-control">Control No.</th>
                 <th class="col-course">Course</th>
                 <th class="col-released">Documents Released</th>
                 <th class="col-purpose">Purpose</th>
-                <th class="col-receipt">Receipt Number</th>
+                <th class="col-receipt">Receipt No.</th>
                 <th class="col-amount">Amount</th>
                 <th class="col-actions admin-only hidden">Actions</th>
               </tr>
@@ -114,6 +114,21 @@
     <p>Entries are visible to everyone. Adding, editing, or removing a record requires an admin login.</p>
   </footer>
 
+</div>
+
+<!-- Storage widget (fixed bottom-right) -->
+<div id="storageWidget" class="storage-widget hidden">
+  <div class="storage-widget-label">
+    <span class="storage-widget-title">Database Storage</span>
+    <span id="storageWidgetKb" class="storage-widget-kb"></span>
+  </div>
+  <div class="storage-bar-track">
+    <div id="storageBarFill" class="storage-bar-fill"></div>
+  </div>
+  <div class="storage-widget-footer">
+    <span id="storageWidgetPercent" class="storage-widget-percent"></span>
+    <span id="storageWidgetLimit" class="storage-widget-limit"></span>
+  </div>
 </div>
 
 <!-- Login modal -->
