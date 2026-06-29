@@ -17,7 +17,7 @@
     <div class="header-text">
       <p class="eyebrow">Register &middot; Volume I</p>
       <h1>Digital Record Logbook</h1>
-      <p class="subtitle">Dates, transactions, and the hand that filed them.</p>
+      <p class="subtitle">Document releases, receipts, and the trail they leave.</p>
     </div>
     <div class="header-actions">
       <span id="modeBadge" class="stamp">View Only</span>
@@ -26,6 +26,8 @@
       <button id="exportBtn" class="btn btn-outline hidden">Export to Excel</button>
     </div>
   </header>
+
+  <div id="storageWarning" class="storage-warning hidden" role="alert"></div>
 
   <main class="ledger-book">
     <div class="ledger-margin"></div>
@@ -39,34 +41,70 @@
             <label for="newDate">Date &amp; Time</label>
             <input type="datetime-local" id="newDate" required>
           </div>
-          <div class="field field-grow">
-            <label for="newTransaction">Transaction</label>
-            <input type="text" id="newTransaction" placeholder="e.g. Released 3 boxes of file folders" required>
+          <div class="field">
+            <label for="newName">Name</label>
+            <input type="text" id="newName" placeholder="e.g. Juan Dela Cruz" required>
           </div>
           <div class="field">
-            <label for="newFiledBy">Filed by</label>
-            <input type="text" id="newFiledBy" placeholder="e.g. J. Santos" required>
+            <label for="newControlNo">Control Number</label>
+            <input type="text" id="newControlNo" placeholder="e.g. CN-2026-0099" required>
+          </div>
+          <div class="field">
+            <label for="newCourse">Course</label>
+            <input type="text" id="newCourse" placeholder="e.g. BS Computer Science" required>
+          </div>
+          <div class="field">
+            <label for="newDocumentsReleased">Documents Released</label>
+            <input type="text" id="newDocumentsReleased" placeholder="e.g. Transcript of Records" required>
+          </div>
+          <div class="field">
+            <label for="newPurpose">Purpose</label>
+            <input type="text" id="newPurpose" placeholder="e.g. Employment requirement" required>
+          </div>
+          <div class="field">
+            <label for="newReceiptNo">Receipt Number</label>
+            <input type="text" id="newReceiptNo" placeholder="e.g. OR-00123" required>
+          </div>
+          <div class="field">
+            <label for="newAmount">Amount</label>
+            <input type="number" id="newAmount" step="0.01" min="0" placeholder="0.00" required>
           </div>
           <button type="submit" class="btn btn-primary">Add Entry</button>
         </form>
       </section>
 
       <section class="table-section">
+
+        <div class="toolbar">
+          <div class="search-field">
+            <input type="text" id="searchInput" placeholder="Search by name, control no., course, document, purpose, receipt no., or amount">
+          </div>
+        </div>
+
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
                 <th class="col-date">Date &amp; Time</th>
-                <th class="col-transaction">Transaction</th>
-                <th class="col-filer">Filed By</th>
+                <th class="col-name">Name</th>
+                <th class="col-control">Control Number</th>
+                <th class="col-course">Course</th>
+                <th class="col-released">Documents Released</th>
+                <th class="col-purpose">Purpose</th>
+                <th class="col-receipt">Receipt Number</th>
+                <th class="col-amount">Amount</th>
                 <th class="col-actions admin-only hidden">Actions</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>
           </table>
         </div>
-        <p id="emptyState" class="empty-state hidden">No entries yet. The page is blank, waiting for the first record.</p>
+
+        <p id="emptyState" class="empty-state hidden">No entries yet.</p>
         <p id="statusMsg" class="status-msg" role="status"></p>
+
+        <div id="pagination" class="pagination"></div>
+
       </section>
 
     </div>

@@ -2,6 +2,12 @@ const API_BASE = '/api';
 
 let token = sessionStorage.getItem('logbook_token') || null;
 let records = [];
+let currentPage = 1;
+let totalPages = 1;
+let totalCount = 0;
+const pageSize = 15;
+let searchTerm = '';
+let searchDebounceTimer = null;
 
 const els = {
   modeBadge: document.getElementById('modeBadge'),
@@ -19,6 +25,9 @@ const els = {
   emptyState: document.getElementById('emptyState'),
   statusMsg: document.getElementById('statusMsg'),
   newDate: document.getElementById('newDate'),
+  searchInput: document.getElementById('searchInput'),
+  pagination: document.getElementById('pagination'),
+  storageWarning: document.getElementById('storageWarning'),
 };
 
 function isAdmin() {
@@ -40,6 +49,12 @@ function formatDate(value) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatAmount(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return value;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function toDatetimeInputValue(d = new Date()) {
@@ -91,14 +106,48 @@ function forceLogout(message) {
   if (message) setStatus(message, true);
 }
 
+function renderStorageWarning(storage) {
+  if (!storage || !storage.limitBytes) {
+    els.storageWarning.classList.add('hidden');
+    return;
+  }
+  const percent = storage.percent;
+  const usedMb = (storage.bytes / (1024 * 1024)).toFixed(1);
+  const limitMb = Math.round(storage.limitBytes / (1024 * 1024));
+
+  if (percent >= 90) {
+    els.storageWarning.textContent =
+      `Database storage is at ${percent.toFixed(0)}% (${usedMb} MB of ${limitMb} MB). ` +
+      `You're close to the limit — consider exporting and archiving older entries soon.`;
+    els.storageWarning.classList.remove('hidden');
+    els.storageWarning.classList.add('warning-danger');
+  } else if (percent >= 75) {
+    els.storageWarning.textContent =
+      `Heads up: database storage is at ${percent.toFixed(0)}% (${usedMb} MB of ${limitMb} MB).`;
+    els.storageWarning.classList.remove('hidden', 'warning-danger');
+  } else {
+    els.storageWarning.classList.add('hidden');
+  }
+}
+
 async function fetchRecords() {
   setStatus('Loading entries…');
   try {
-    const res = await fetch(`${API_BASE}/records`);
+    const params = new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize) });
+    if (searchTerm) params.set('search', searchTerm);
+
+    const res = await fetch(`${API_BASE}/records?${params.toString()}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load entries');
+
     records = data.records;
+    currentPage = data.pagination.page;
+    totalPages = data.pagination.totalPages;
+    totalCount = data.pagination.total;
+
     renderTable();
+    renderPagination();
+    renderStorageWarning(data.storage);
     setStatus('');
   } catch (err) {
     setStatus(`Could not load entries: ${err.message}`, true);
@@ -109,6 +158,9 @@ function renderTable() {
   els.tableBody.innerHTML = '';
 
   if (!records.length) {
+    els.emptyState.textContent = searchTerm
+      ? 'No entries match your search.'
+      : 'No entries yet. The page is blank, waiting for the first record.';
     els.emptyState.classList.remove('hidden');
     return;
   }
@@ -119,8 +171,13 @@ function renderTable() {
     tr.dataset.id = r.id;
     tr.innerHTML = `
       <td class="cell-date">${formatDate(r.log_date)}</td>
-      <td class="cell-transaction">${escapeHtml(r.transaction)}</td>
-      <td class="cell-filer">${escapeHtml(r.filed_by)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.control_no)}</td>
+      <td>${escapeHtml(r.course)}</td>
+      <td>${escapeHtml(r.documents_released)}</td>
+      <td>${escapeHtml(r.purpose)}</td>
+      <td>${escapeHtml(r.receipt_no)}</td>
+      <td class="cell-amount">${formatAmount(r.amount)}</td>
       ${isAdmin() ? `
       <td class="cell-actions">
         <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
@@ -131,14 +188,89 @@ function renderTable() {
   });
 }
 
+function getPageNumbers(current, total) {
+  const delta = 1;
+  const range = [];
+  for (let i = Math.max(1, current - delta); i <= Math.min(total, current + delta); i++) {
+    range.push(i);
+  }
+  if (range[0] > 1) {
+    if (range[0] > 2) range.unshift('...');
+    range.unshift(1);
+  }
+  if (range[range.length - 1] < total) {
+    if (range[range.length - 1] < total - 1) range.push('...');
+    range.push(total);
+  }
+  return range;
+}
+
+function goToPage(p) {
+  if (p < 1 || p > totalPages || p === currentPage) return;
+  currentPage = p;
+  fetchRecords();
+}
+
+function renderPagination() {
+  els.pagination.innerHTML = '';
+  if (totalCount === 0) return;
+
+  const info = document.createElement('span');
+  const start = (currentPage - 1) * pageSize + 1;
+  const end = Math.min(currentPage * pageSize, totalCount);
+  info.textContent = `Showing ${start}–${end} of ${totalCount} entries`;
+  els.pagination.appendChild(info);
+
+  if (totalPages > 1) {
+    const pagesWrap = document.createElement('div');
+    pagesWrap.className = 'pagination-pages';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'page-btn';
+    prevBtn.textContent = '‹ Prev';
+    prevBtn.disabled = currentPage <= 1;
+    prevBtn.addEventListener('click', () => goToPage(currentPage - 1));
+    pagesWrap.appendChild(prevBtn);
+
+    getPageNumbers(currentPage, totalPages).forEach((p) => {
+      if (p === '...') {
+        const span = document.createElement('span');
+        span.className = 'page-ellipsis';
+        span.textContent = '…';
+        pagesWrap.appendChild(span);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'page-btn' + (p === currentPage ? ' active' : '');
+        btn.textContent = String(p);
+        btn.addEventListener('click', () => goToPage(p));
+        pagesWrap.appendChild(btn);
+      }
+    });
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'page-btn';
+    nextBtn.textContent = 'Next ›';
+    nextBtn.disabled = currentPage >= totalPages;
+    nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
+    pagesWrap.appendChild(nextBtn);
+
+    els.pagination.appendChild(pagesWrap);
+  }
+}
+
 function startEdit(tr, id) {
   const record = records.find((r) => String(r.id) === String(id));
   if (!record) return;
 
   tr.innerHTML = `
     <td><input type="datetime-local" class="edit-date" value="${toEditDatetimeValue(record.log_date)}"></td>
-    <td><input type="text" class="edit-transaction" value="${escapeAttr(record.transaction)}"></td>
-    <td><input type="text" class="edit-filer" value="${escapeAttr(record.filed_by)}"></td>
+    <td><input type="text" class="edit-name" value="${escapeAttr(record.name)}"></td>
+    <td><input type="text" class="edit-control" value="${escapeAttr(record.control_no)}"></td>
+    <td><input type="text" class="edit-course" value="${escapeAttr(record.course)}"></td>
+    <td><input type="text" class="edit-released" value="${escapeAttr(record.documents_released)}"></td>
+    <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
+    <td><input type="text" class="edit-receipt" value="${escapeAttr(record.receipt_no)}"></td>
+    <td><input type="number" step="0.01" min="0" class="edit-amount" value="${escapeAttr(record.amount)}"></td>
     <td class="cell-actions">
       <button class="btn-icon save-btn" title="Save changes" aria-label="Save changes">&#10003;</button>
       <button class="btn-icon cancel-btn" title="Cancel" aria-label="Cancel">&#10005;</button>
@@ -148,12 +280,36 @@ function startEdit(tr, id) {
   tr.querySelector('.cancel-btn').addEventListener('click', () => renderTable());
 }
 
+function collectFields(scope) {
+  const get = (cls) => scope.querySelector(cls);
+  return {
+    log_date: get('.edit-date, #newDate')?.value,
+    name: get('.edit-name, #newName')?.value.trim(),
+    control_no: get('.edit-control, #newControlNo')?.value.trim(),
+    course: get('.edit-course, #newCourse')?.value.trim(),
+    documents_released: get('.edit-released, #newDocumentsReleased')?.value.trim(),
+    purpose: get('.edit-purpose, #newPurpose')?.value.trim(),
+    receipt_no: get('.edit-receipt, #newReceiptNo')?.value.trim(),
+    amount: get('.edit-amount, #newAmount')?.value,
+  };
+}
+
+function fieldsAreValid(f) {
+  if (!f.log_date || !f.name || !f.control_no || !f.course || !f.documents_released || !f.purpose || !f.receipt_no) {
+    return 'All fields are required.';
+  }
+  const amount = Number(f.amount);
+  if (f.amount === '' || f.amount === undefined || Number.isNaN(amount) || amount < 0) {
+    return 'Amount must be a valid number (0 or more).';
+  }
+  return null;
+}
+
 async function saveEdit(tr, id) {
-  const log_date = tr.querySelector('.edit-date').value;
-  const transaction = tr.querySelector('.edit-transaction').value.trim();
-  const filed_by = tr.querySelector('.edit-filer').value.trim();
-  if (!log_date || !transaction || !filed_by) {
-    setStatus('All fields are required to save an entry.', true);
+  const fields = collectFields(tr);
+  const error = fieldsAreValid(fields);
+  if (error) {
+    setStatus(error, true);
     return;
   }
 
@@ -161,7 +317,7 @@ async function saveEdit(tr, id) {
     const res = await fetch(`${API_BASE}/records?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ log_date, transaction, filed_by }),
+      body: JSON.stringify({ ...fields, amount: Number(fields.amount) }),
     });
     const data = await res.json();
     if (res.status === 401) return forceLogout('Session expired. Please log in again.');
@@ -237,34 +393,65 @@ els.logoutBtn.addEventListener('click', () => {
   setStatus('Logged out.');
 });
 
-els.exportBtn.addEventListener('click', () => {
-  if (!records.length) {
-    setStatus('Nothing to export yet — the log is empty.', true);
-    return;
+// --- Export to Excel (exports ALL matching records, not just the current page) ---
+els.exportBtn.addEventListener('click', async () => {
+  setStatus('Preparing export…');
+  try {
+    const params = new URLSearchParams({ page: '1', pageSize: '2000' });
+    if (searchTerm) params.set('search', searchTerm);
+
+    const res = await fetch(`${API_BASE}/records?${params.toString()}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load records for export');
+
+    if (!data.records.length) {
+      setStatus('Nothing to export yet.', true);
+      return;
+    }
+
+    const rows = data.records.map((r) => ({
+      'Date & Time': formatDate(r.log_date),
+      Name: r.name,
+      'Control Number': r.control_no,
+      Course: r.course,
+      'Documents Released': r.documents_released,
+      Purpose: r.purpose,
+      'Receipt Number': r.receipt_no,
+      Amount: Number(r.amount),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 18 },
+      { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 12 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Logbook');
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `logbook-export-${stamp}.xlsx`);
+    setStatus('Excel file downloaded.');
+  } catch (err) {
+    setStatus(`Could not export: ${err.message}`, true);
   }
-  const rows = records.map((r) => ({
-    'Date & Time': formatDate(r.log_date),
-    Transaction: r.transaction,
-    'Filed By': r.filed_by,
-  }));
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  worksheet['!cols'] = [{ wch: 14 }, { wch: 50 }, { wch: 20 }];
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Logbook');
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(workbook, `logbook-export-${stamp}.xlsx`);
-  setStatus('Excel file downloaded.');
+});
+
+// --- Search ---
+els.searchInput.addEventListener('input', () => {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    searchTerm = els.searchInput.value.trim();
+    currentPage = 1;
+    fetchRecords();
+  }, 350);
 });
 
 // --- Add entry ---
 els.addForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const log_date = els.newDate.value;
-  const transaction = document.getElementById('newTransaction').value.trim();
-  const filed_by = document.getElementById('newFiledBy').value.trim();
-
-  if (!log_date || !transaction || !filed_by) {
-    setStatus('All fields are required to add an entry.', true);
+  const fields = collectFields(els.addForm);
+  const error = fieldsAreValid(fields);
+  if (error) {
+    setStatus(error, true);
     return;
   }
 
@@ -272,7 +459,7 @@ els.addForm.addEventListener('submit', async (e) => {
     const res = await fetch(`${API_BASE}/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ log_date, transaction, filed_by }),
+      body: JSON.stringify({ ...fields, amount: Number(fields.amount) }),
     });
     const data = await res.json();
     if (res.status === 401) return forceLogout('Session expired. Please log in again.');
@@ -281,6 +468,7 @@ els.addForm.addEventListener('submit', async (e) => {
     els.addForm.reset();
     els.newDate.value = toDatetimeInputValue();
     setStatus('Entry added.');
+    currentPage = 1; // newest entries sort first, so jump back to page 1
     await fetchRecords();
   } catch (err) {
     setStatus(`Could not add entry: ${err.message}`, true);
