@@ -202,12 +202,12 @@ function updateCategoryUI() {
     els.addTitle.textContent = currentCategory === 'tor' ? 'New TOR Entry' : 'New Mailing Entry';
   }
 
-  // Show/hide field groups
+  // Show/hide field groups (using class toggle for reliability)
   document.querySelectorAll('.tor-fields').forEach(el => {
-    el.style.display = currentCategory === 'tor' ? '' : 'none';
+    el.classList.toggle('hidden', currentCategory !== 'tor');
   });
   document.querySelectorAll('.mailing-fields').forEach(el => {
-    el.style.display = currentCategory === 'mailing' ? '' : 'none';
+    el.classList.toggle('hidden', currentCategory !== 'mailing');
   });
 
   // Update tab subtitle
@@ -310,6 +310,8 @@ function renderTable() {
   }
   els.emptyState.classList.add('hidden');
 
+  const showActions = isAdmin();
+
   records.forEach((r) => {
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
@@ -324,7 +326,7 @@ function renderTable() {
         <td>${escapeHtml(r.purpose)}</td>
         <td class="cell-mono">${escapeHtml(r.receipt_no)}</td>
         <td class="cell-amount">${formatAmount(r.amount)}</td>
-        ${isAdmin() ? `
+        ${showActions ? `
         <td class="cell-actions">
           <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
           <button class="btn-icon delete-btn" title="Delete entry" aria-label="Delete entry">&#128465;</button>
@@ -337,7 +339,7 @@ function renderTable() {
         <td>${escapeHtml(r.purpose)}</td>
         <td>${escapeHtml(r.school || '')}</td>
         <td class="cell-mono">${escapeHtml(r.delivery_method || '')}</td>
-        ${isAdmin() ? `
+        ${showActions ? `
         <td class="cell-actions">
           <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
           <button class="btn-icon delete-btn" title="Delete entry" aria-label="Delete entry">&#128465;</button>
@@ -689,6 +691,26 @@ function init() {
   updateCategoryUI();
   updateModeUI();
   fetchRecords();
+
+  // === Real-time storage monitoring ===
+  // Updates the storage widget every 30 seconds without reloading the whole table
+  setInterval(async () => {
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '1',
+        category: currentCategory
+      });
+      const res = await fetch(`${API_BASE}/records?${params.toString()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.storage) {
+        renderStorageWarning(data.storage);
+      }
+    } catch (_) {
+      // Fail silently — storage widget is non-critical
+    }
+  }, 30000); // every 30 seconds
 }
 
 init();
