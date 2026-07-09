@@ -16,15 +16,26 @@ function parseBody(req) {
   return body || {};
 }
 
-const TEXT_FIELDS = ['log_date', 'name', 'control_no', 'course', 'documents_released', 'purpose', 'receipt_no'];
-
 function validateBody(body) {
-  for (const f of TEXT_FIELDS) {
-    if (!body[f] || !String(body[f]).trim()) return `Missing required field: ${f}`;
+  const cat = (body.category || 'tor').toString().trim();
+  const isTor = cat === 'tor';
+
+  const requiredTor = ['log_date', 'name', 'control_no', 'course', 'documents_released', 'purpose', 'receipt_no'];
+  const requiredMailing = ['log_date', 'name', 'purpose', 'school', 'delivery_method'];
+  const required = isTor ? requiredTor : requiredMailing;
+
+  for (const f of required) {
+    if (!body[f] || !String(body[f]).trim()) {
+      return `Missing required field: ${f}`;
+    }
   }
-  const amount = Number(body.amount);
-  if (body.amount === undefined || body.amount === null || body.amount === '' || Number.isNaN(amount) || amount < 0) {
-    return 'Amount must be a valid number (0 or more)';
+
+  // Amount only validated if provided (for TOR mainly, mailing can omit or set 0)
+  if (body.amount !== undefined && body.amount !== null && body.amount !== '') {
+    const amount = Number(body.amount);
+    if (Number.isNaN(amount) || amount < 0) {
+      return 'Amount must be a valid number (0 or more)';
+    }
   }
   return null;
 }
@@ -39,21 +50,33 @@ module.exports = async function handler(req, res) {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1);
       const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(req.query.pageSize, 10) || DEFAULT_PAGE_SIZE));
       const search = (req.query.search || '').toString().trim();
+      const category = (req.query.category || '').toString().trim();
 
+      const whereParts = [];
       const values = [];
-      let whereClause = '';
+
       if (search) {
         values.push(`%${search}%`);
-        whereClause = `WHERE (
-          name ILIKE $1 OR
-          control_no ILIKE $1 OR
-          course ILIKE $1 OR
-          documents_released ILIKE $1 OR
-          purpose ILIKE $1 OR
-          receipt_no ILIKE $1 OR
-          amount::text ILIKE $1
-        )`;
+        const searchIdx = values.length;
+        whereParts.push(`(
+          name ILIKE $${searchIdx} OR
+          control_no ILIKE $${searchIdx} OR
+          course ILIKE $${searchIdx} OR
+          documents_released ILIKE $${searchIdx} OR
+          purpose ILIKE $${searchIdx} OR
+          receipt_no ILIKE $${searchIdx} OR
+          school ILIKE $${searchIdx} OR
+          delivery_method ILIKE $${searchIdx} OR
+          amount::text ILIKE $${searchIdx}
+        )`);
       }
+
+      if (category && ['tor', 'mailing'].includes(category)) {
+        values.push(category);
+        whereParts.push(`category = $${values.length}`);
+      }
+
+      const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
       const countResult = await pool.query(
         `SELECT COUNT(*) AS total FROM logbook_entries ${whereClause}`,
@@ -65,11 +88,12 @@ module.exports = async function handler(req, res) {
       const offset = (currentPage - 1) * pageSize;
 
       const dataValues = [...values, pageSize, offset];
-      const limitIdx = dataValues.length - 1; // position of pageSize
-      const offsetIdx = dataValues.length;     // position of offset
+      const limitIdx = dataValues.length - 1;
+      const offsetIdx = dataValues.length;
 
       const { rows } = await pool.query(
-        `SELECT id, log_date, name, control_no, course, documents_released, purpose, receipt_no, amount, created_at, updated_at
+        `SELECT id, log_date, name, control_no, course, documents_released, purpose, receipt_no, amount,
+                category, school, delivery_method, created_at, updated_at
          FROM logbook_entries
          ${whereClause}
          ORDER BY log_date DESC, id DESC
@@ -81,7 +105,7 @@ module.exports = async function handler(req, res) {
       try {
         storage = await getStorageInfo();
       } catch {
-        storage = null; // non-fatal if the role lacks permission to check size
+        storage = null;
       }
 
       return res.status(200).json({
@@ -103,14 +127,34 @@ module.exports = async function handler(req, res) {
       const error = validateBody(body);
       if (error) return res.status(400).json({ error });
 
-      const { log_date, name, control_no, course, documents_released, purpose, receipt_no } = body;
-      const amount = Number(body.amount);
+      const cat = (body.category || 'tor').toString().trim();
+      const isTor = cat === 'tor';
+
+      const log_date = body.log_date;
+      const name = body.name.trim();
+      const purpose = body.purpose.trim();
+      const amount = Number(body.amount) || 0;
+
+      let control_no = '', course = '', documents_released = '', receipt_no = '';
+      let school = '', delivery_method = '';
+
+      if (isTor) {
+        control_no = (body.control_no || '').trim();
+        course = (body.course || '').trim();
+        documents_released = (body.documents_released || '').trim();
+        receipt_no = (body.receipt_no || '').trim();
+      } else {
+        school = (body.school || '').trim();
+        delivery_method = (body.delivery_method || '').trim();
+      }
 
       const { rows } = await pool.query(
         `INSERT INTO logbook_entries
-           (log_date, name, control_no, course, documents_released, purpose, receipt_no, amount)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [log_date, name, control_no, course, documents_released, purpose, receipt_no, amount]
+           (log_date, name, control_no, course, documents_released, purpose, receipt_no, amount,
+            category, school, delivery_method)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [log_date, name, control_no, course, documents_released, purpose, receipt_no, amount,
+         cat, school, delivery_method]
       );
       return res.status(201).json({ record: rows[0] });
     }
@@ -122,15 +166,35 @@ module.exports = async function handler(req, res) {
       const error = validateBody(body);
       if (error) return res.status(400).json({ error });
 
-      const { log_date, name, control_no, course, documents_released, purpose, receipt_no } = body;
-      const amount = Number(body.amount);
+      const cat = (body.category || 'tor').toString().trim();
+      const isTor = cat === 'tor';
+
+      const log_date = body.log_date;
+      const name = body.name.trim();
+      const purpose = body.purpose.trim();
+      const amount = Number(body.amount) || 0;
+
+      let control_no = '', course = '', documents_released = '', receipt_no = '';
+      let school = '', delivery_method = '';
+
+      if (isTor) {
+        control_no = (body.control_no || '').trim();
+        course = (body.course || '').trim();
+        documents_released = (body.documents_released || '').trim();
+        receipt_no = (body.receipt_no || '').trim();
+      } else {
+        school = (body.school || '').trim();
+        delivery_method = (body.delivery_method || '').trim();
+      }
 
       const { rows } = await pool.query(
         `UPDATE logbook_entries
          SET log_date = $1, name = $2, control_no = $3, course = $4,
-             documents_released = $5, purpose = $6, receipt_no = $7, amount = $8, updated_at = NOW()
-         WHERE id = $9 RETURNING *`,
-        [log_date, name, control_no, course, documents_released, purpose, receipt_no, amount, id]
+             documents_released = $5, purpose = $6, receipt_no = $7, amount = $8,
+             category = $9, school = $10, delivery_method = $11, updated_at = NOW()
+         WHERE id = $12 RETURNING *`,
+        [log_date, name, control_no, course, documents_released, purpose, receipt_no, amount,
+         cat, school, delivery_method, id]
       );
       if (!rows.length) return res.status(404).json({ error: 'Record not found' });
       return res.status(200).json({ record: rows[0] });

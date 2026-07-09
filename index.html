@@ -34,41 +34,76 @@
 
     <div class="ledger-content">
 
+      <!-- Tab Switcher -->
+      <div class="tabs-section">
+        <div class="tab-buttons" role="tablist" aria-label="Logbook sections">
+          <button type="button" class="tab-btn active" data-tab="tor" role="tab" aria-selected="true">
+            TOR Logbook
+          </button>
+          <button type="button" class="tab-btn" data-tab="mailing" role="tab" aria-selected="false">
+            Mailing Logbook
+          </button>
+        </div>
+        <p class="tab-subtitle" id="tabSubtitle">Transcript of Records • Document releases and receipts</p>
+      </div>
+
       <section id="addSection" class="add-section hidden">
-        <h2>New Entry</h2>
+        <h2 id="addTitle">New TOR Entry</h2>
         <form id="addForm" class="entry-form">
+          <!-- Common fields -->
           <div class="field">
-            <label for="newDate">Date &amp; Time</label>
-            <input type="datetime-local" id="newDate" required>
+            <label for="newDate">Date</label>
+            <input type="date" id="newDate" required>
           </div>
           <div class="field">
             <label for="newName">Name</label>
             <input type="text" id="newName" placeholder="e.g. Juan Dela Cruz" required>
           </div>
           <div class="field">
-            <label for="newControlNo">Control Number</label>
-            <input type="text" id="newControlNo" placeholder="e.g. CN-2026-0099" required>
-          </div>
-          <div class="field">
-            <label for="newCourse">Course</label>
-            <input type="text" id="newCourse" placeholder="e.g. BS Computer Science" required>
-          </div>
-          <div class="field">
-            <label for="newDocumentsReleased">Documents Released</label>
-            <input type="text" id="newDocumentsReleased" placeholder="e.g. Transcript of Records" required>
-          </div>
-          <div class="field">
             <label for="newPurpose">Purpose</label>
-            <input type="text" id="newPurpose" placeholder="e.g. Employment requirement" required>
+            <input type="text" id="newPurpose" placeholder="e.g. Employment requirement / School requirement" required>
           </div>
-          <div class="field">
-            <label for="newReceiptNo">Receipt Number</label>
-            <input type="text" id="newReceiptNo" placeholder="e.g. OR-00123" required>
+
+          <!-- TOR specific fields -->
+          <div class="tor-fields">
+            <div class="field">
+              <label for="newControlNo">Control Number</label>
+              <input type="text" id="newControlNo" placeholder="e.g. CN-2026-0099" required>
+            </div>
+            <div class="field">
+              <label for="newCourse">Course</label>
+              <input type="text" id="newCourse" placeholder="e.g. BS Computer Science" required>
+            </div>
+            <div class="field">
+              <label for="newDocumentsReleased">Documents Released</label>
+              <input type="text" id="newDocumentsReleased" placeholder="e.g. Transcript of Records" required>
+            </div>
+            <div class="field">
+              <label for="newReceiptNo">Receipt Number</label>
+              <input type="text" id="newReceiptNo" placeholder="e.g. OR-00123" required>
+            </div>
+            <div class="field">
+              <label for="newAmount">Amount</label>
+              <input type="number" id="newAmount" step="0.01" min="0" placeholder="0.00" required>
+            </div>
           </div>
-          <div class="field">
-            <label for="newAmount">Amount</label>
-            <input type="number" id="newAmount" step="0.01" min="0" placeholder="0.00" required>
+
+          <!-- Mailing specific fields -->
+          <div class="mailing-fields hidden">
+            <div class="field">
+              <label for="newSchool">School / Destination</label>
+              <input type="text" id="newSchool" placeholder="e.g. University of the Philippines" required>
+            </div>
+            <div class="field">
+              <label for="newDelivery">Delivery Method</label>
+              <select id="newDelivery" required>
+                <option value="">Select method...</option>
+                <option value="Hand Carry">Hand Carry</option>
+                <option value="Mailed">Mailed</option>
+              </select>
+            </div>
           </div>
+
           <button type="submit" class="btn btn-primary">Add Entry</button>
         </form>
       </section>
@@ -84,16 +119,8 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr>
-                <th class="col-date">Date &amp; Time</th>
-                <th class="col-name">Name</th>
-                <th class="col-control">Control No.</th>
-                <th class="col-course">Course</th>
-                <th class="col-released">Documents Released</th>
-                <th class="col-purpose">Purpose</th>
-                <th class="col-receipt">Receipt No.</th>
-                <th class="col-amount">Amount</th>
-                <th class="col-actions admin-only hidden">Actions</th>
+              <tr id="tableHeadRow">
+                <!-- Populated dynamically by JS based on active tab -->
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>

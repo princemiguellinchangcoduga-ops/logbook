@@ -27,7 +27,7 @@ function ensureTable() {
       await p.query(`
         CREATE TABLE IF NOT EXISTS logbook_entries (
           id SERIAL PRIMARY KEY,
-          log_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          log_date DATE NOT NULL DEFAULT CURRENT_DATE,
           name TEXT NOT NULL DEFAULT '',
           control_no TEXT NOT NULL DEFAULT '',
           course TEXT NOT NULL DEFAULT '',
@@ -35,13 +35,16 @@ function ensureTable() {
           purpose TEXT NOT NULL DEFAULT '',
           receipt_no TEXT NOT NULL DEFAULT '',
           amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+          category TEXT NOT NULL DEFAULT 'tor',
+          school TEXT NOT NULL DEFAULT '',
+          delivery_method TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
 
       // Upgrade older deployments of this app that used a previous/different schema.
-      await p.query(`ALTER TABLE logbook_entries ALTER COLUMN log_date TYPE TIMESTAMPTZ USING log_date::timestamptz;`);
+      await p.query(`ALTER TABLE logbook_entries ALTER COLUMN log_date TYPE DATE USING log_date::date;`);
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';`);
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS control_no TEXT NOT NULL DEFAULT '';`);
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS course TEXT NOT NULL DEFAULT '';`);
@@ -49,6 +52,9 @@ function ensureTable() {
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT '';`);
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS receipt_no TEXT NOT NULL DEFAULT '';`);
       await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS amount NUMERIC(10, 2) NOT NULL DEFAULT 0;`);
+      await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'tor';`);
+      await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS school TEXT NOT NULL DEFAULT '';`);
+      await p.query(`ALTER TABLE logbook_entries ADD COLUMN IF NOT EXISTS delivery_method TEXT NOT NULL DEFAULT '';`);
       // Fields from earlier versions of this app that are no longer used.
       await p.query(`ALTER TABLE logbook_entries DROP COLUMN IF EXISTS student_name;`);
       await p.query(`ALTER TABLE logbook_entries DROP COLUMN IF EXISTS transaction_no;`);
@@ -57,6 +63,7 @@ function ensureTable() {
       await p.query(`ALTER TABLE logbook_entries DROP COLUMN IF EXISTS filed_by;`);
 
       await p.query(`CREATE INDEX IF NOT EXISTS idx_logbook_log_date ON logbook_entries (log_date DESC);`);
+      await p.query(`CREATE INDEX IF NOT EXISTS idx_logbook_category ON logbook_entries (category);`);
     })();
   }
   return tableReady;

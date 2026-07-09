@@ -8,6 +8,7 @@ let totalCount = 0;
 const pageSize = 15;
 let searchTerm = '';
 let searchDebounceTimer = null;
+let currentCategory = 'tor'; // 'tor' or 'mailing'
 
 const els = {
   modeBadge: document.getElementById('modeBadge'),
@@ -16,7 +17,9 @@ const els = {
   exportBtn: document.getElementById('exportBtn'),
   addSection: document.getElementById('addSection'),
   addForm: document.getElementById('addForm'),
+  addTitle: document.getElementById('addTitle'),
   tableBody: document.getElementById('tableBody'),
+  tableHeadRow: document.getElementById('tableHeadRow'),
   actionsHeader: document.querySelector('.col-actions'),
   loginModal: document.getElementById('loginModal'),
   loginForm: document.getElementById('loginForm'),
@@ -33,6 +36,7 @@ const els = {
   storageWidgetKb: document.getElementById('storageWidgetKb'),
   storageWidgetPercent: document.getElementById('storageWidgetPercent'),
   storageWidgetLimit: document.getElementById('storageWidgetLimit'),
+  tabSubtitle: document.getElementById('tabSubtitle'),
 };
 
 function isAdmin() {
@@ -45,14 +49,13 @@ function setStatus(msg, isError) {
 }
 
 function formatDate(value) {
+  if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
   });
 }
 
@@ -62,15 +65,16 @@ function formatAmount(value) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function toDatetimeInputValue(d = new Date()) {
+function toDateInputValue(d = new Date()) {
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function toEditDatetimeValue(value) {
+function toEditDateValue(value) {
+  if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  return toDatetimeInputValue(d);
+  return toDateInputValue(d);
 }
 
 function escapeHtml(str) {
@@ -91,7 +95,6 @@ function updateModeUI() {
     els.logoutBtn.classList.remove('hidden');
     els.exportBtn.classList.remove('hidden');
     els.addSection.classList.remove('hidden');
-    els.actionsHeader.classList.remove('hidden');
   } else {
     els.modeBadge.textContent = 'View Only';
     els.modeBadge.classList.remove('admin');
@@ -99,8 +102,8 @@ function updateModeUI() {
     els.logoutBtn.classList.add('hidden');
     els.exportBtn.classList.add('hidden');
     els.addSection.classList.add('hidden');
-    els.actionsHeader.classList.add('hidden');
   }
+  updateTableHeaders();
   renderTable();
 }
 
@@ -112,7 +115,6 @@ function forceLogout(message) {
 }
 
 function renderStorageWarning(storage) {
-  // Hide old banner always — we use the widget instead
   els.storageWarning.classList.add('hidden');
 
   if (!storage || !storage.limitBytes) {
@@ -124,18 +126,14 @@ function renderStorageWarning(storage) {
   const usedKb = (storage.bytes / 1024).toFixed(1);
   const limitKb = (storage.limitBytes / 1024).toFixed(0);
   const remainKb = ((storage.limitBytes - storage.bytes) / 1024).toFixed(1);
-  const limitMb = Math.round(storage.limitBytes / (1024 * 1024));
 
-  // Show widget
   els.storageWidget.classList.remove('hidden');
 
-  // Bar fill + color
   els.storageBarFill.style.width = `${Math.min(percent, 100).toFixed(1)}%`;
   els.storageBarFill.classList.remove('warn', 'danger');
   if (percent >= 90) els.storageBarFill.classList.add('danger');
   else if (percent >= 75) els.storageBarFill.classList.add('warn');
 
-  // Labels
   els.storageWidgetKb.textContent = `${usedKb} KB used`;
   els.storageWidgetPercent.textContent = `${percent.toFixed(1)}%`;
   els.storageWidgetLimit.textContent = `${remainKb} KB left`;
@@ -144,7 +142,11 @@ function renderStorageWarning(storage) {
 async function fetchRecords() {
   setStatus('Loading entries…');
   try {
-    const params = new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize) });
+    const params = new URLSearchParams({
+      page: String(currentPage),
+      pageSize: String(pageSize),
+      category: currentCategory,
+    });
     if (searchTerm) params.set('search', searchTerm);
 
     const res = await fetch(`${API_BASE}/records?${params.toString()}`);
@@ -165,38 +167,65 @@ async function fetchRecords() {
   }
 }
 
-function renderTable() {
-  els.tableBody.innerHTML = '';
+function updateTableHeaders() {
+  if (!els.tableHeadRow) return;
 
-  if (!records.length) {
-    els.emptyState.textContent = searchTerm
-      ? 'No entries match your search.'
-      : 'No entries yet. The page is blank, waiting for the first record.';
-    els.emptyState.classList.remove('hidden');
-    return;
-  }
-  els.emptyState.classList.add('hidden');
+  const showActions = isAdmin();
 
-  records.forEach((r) => {
-    const tr = document.createElement('tr');
-    tr.dataset.id = r.id;
-    tr.innerHTML = `
-      <td class="cell-date cell-mono">${formatDate(r.log_date)}</td>
-      <td class="cell-name">${escapeHtml(r.name)}</td>
-      <td class="cell-mono">${escapeHtml(r.control_no)}</td>
-      <td>${escapeHtml(r.course)}</td>
-      <td>${escapeHtml(r.documents_released)}</td>
-      <td>${escapeHtml(r.purpose)}</td>
-      <td class="cell-mono">${escapeHtml(r.receipt_no)}</td>
-      <td class="cell-amount">${formatAmount(r.amount)}</td>
-      ${isAdmin() ? `
-      <td class="cell-actions">
-        <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
-        <button class="btn-icon delete-btn" title="Delete entry" aria-label="Delete entry">&#128465;</button>
-      </td>` : ''}
+  if (currentCategory === 'tor') {
+    els.tableHeadRow.innerHTML = `
+      <th class="col-date">Date</th>
+      <th class="col-name">Name</th>
+      <th class="col-control">Control No.</th>
+      <th class="col-course">Course</th>
+      <th class="col-released">Documents Released</th>
+      <th class="col-purpose">Purpose</th>
+      <th class="col-receipt">Receipt No.</th>
+      <th class="col-amount">Amount</th>
+      ${showActions ? `<th class="col-actions">Actions</th>` : ''}
     `;
-    els.tableBody.appendChild(tr);
+  } else {
+    els.tableHeadRow.innerHTML = `
+      <th class="col-date">Date</th>
+      <th class="col-name">Name</th>
+      <th class="col-purpose">Purpose</th>
+      <th class="col-school">School</th>
+      <th class="col-delivery">Delivery Method</th>
+      ${showActions ? `<th class="col-actions">Actions</th>` : ''}
+    `;
+  }
+}
+
+function updateCategoryUI() {
+  // Update title
+  if (els.addTitle) {
+    els.addTitle.textContent = currentCategory === 'tor' ? 'New TOR Entry' : 'New Mailing Entry';
+  }
+
+  // Show/hide field groups
+  document.querySelectorAll('.tor-fields').forEach(el => {
+    el.style.display = currentCategory === 'tor' ? '' : 'none';
   });
+  document.querySelectorAll('.mailing-fields').forEach(el => {
+    el.style.display = currentCategory === 'mailing' ? '' : 'none';
+  });
+
+  // Update tab subtitle
+  if (els.tabSubtitle) {
+    els.tabSubtitle.textContent = currentCategory === 'tor'
+      ? 'Transcript of Records • Document releases and receipts'
+      : 'Mailing Log • Hand carry or mailed documents to schools';
+  }
+
+  // Update search placeholder
+  if (els.searchInput) {
+    els.searchInput.placeholder = currentCategory === 'tor'
+      ? 'Search by name, control no., course, document, purpose, receipt no., or amount'
+      : 'Search by name, purpose, school, or delivery method';
+  }
+
+  // Update table headers for current category + admin state
+  updateTableHeaders();
 }
 
 function getPageNumbers(current, total) {
@@ -269,26 +298,99 @@ function renderPagination() {
   }
 }
 
+function renderTable() {
+  els.tableBody.innerHTML = '';
+
+  if (!records.length) {
+    els.emptyState.textContent = searchTerm
+      ? `No entries match your search in the ${currentCategory === 'tor' ? 'TOR' : 'Mailing'} logbook.`
+      : `No entries yet in the ${currentCategory === 'tor' ? 'TOR' : 'Mailing'} logbook.`;
+    els.emptyState.classList.remove('hidden');
+    return;
+  }
+  els.emptyState.classList.add('hidden');
+
+  records.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+
+    if (currentCategory === 'tor') {
+      tr.innerHTML = `
+        <td class="cell-date cell-mono">${formatDate(r.log_date)}</td>
+        <td class="cell-name">${escapeHtml(r.name)}</td>
+        <td class="cell-mono">${escapeHtml(r.control_no)}</td>
+        <td>${escapeHtml(r.course)}</td>
+        <td>${escapeHtml(r.documents_released)}</td>
+        <td>${escapeHtml(r.purpose)}</td>
+        <td class="cell-mono">${escapeHtml(r.receipt_no)}</td>
+        <td class="cell-amount">${formatAmount(r.amount)}</td>
+        ${isAdmin() ? `
+        <td class="cell-actions">
+          <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
+          <button class="btn-icon delete-btn" title="Delete entry" aria-label="Delete entry">&#128465;</button>
+        </td>` : ''}
+      `;
+    } else {
+      tr.innerHTML = `
+        <td class="cell-date cell-mono">${formatDate(r.log_date)}</td>
+        <td class="cell-name">${escapeHtml(r.name)}</td>
+        <td>${escapeHtml(r.purpose)}</td>
+        <td>${escapeHtml(r.school || '')}</td>
+        <td class="cell-mono">${escapeHtml(r.delivery_method || '')}</td>
+        ${isAdmin() ? `
+        <td class="cell-actions">
+          <button class="btn-icon edit-btn" title="Edit entry" aria-label="Edit entry">&#9998;</button>
+          <button class="btn-icon delete-btn" title="Delete entry" aria-label="Delete entry">&#128465;</button>
+        </td>` : ''}
+      `;
+    }
+    els.tableBody.appendChild(tr);
+  });
+}
+
 function startEdit(tr, id) {
   const record = records.find((r) => String(r.id) === String(id));
   if (!record) return;
 
-  tr.innerHTML = `
-    <td><input type="datetime-local" class="edit-date" value="${toEditDatetimeValue(record.log_date)}"></td>
-    <td><input type="text" class="edit-name" value="${escapeAttr(record.name)}"></td>
-    <td><input type="text" class="edit-control" value="${escapeAttr(record.control_no)}"></td>
-    <td><input type="text" class="edit-course" value="${escapeAttr(record.course)}"></td>
-    <td><input type="text" class="edit-released" value="${escapeAttr(record.documents_released)}"></td>
-    <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
-    <td><input type="text" class="edit-receipt" value="${escapeAttr(record.receipt_no)}"></td>
-    <td><input type="number" step="0.01" min="0" class="edit-amount" value="${escapeAttr(record.amount)}"></td>
-    <td class="cell-actions">
-      <button class="btn-icon save-btn" title="Save changes" aria-label="Save changes">&#10003;</button>
-      <button class="btn-icon cancel-btn" title="Cancel" aria-label="Cancel">&#10005;</button>
-    </td>
-  `;
+  if (currentCategory === 'tor') {
+    tr.innerHTML = `
+      <td><input type="date" class="edit-date" value="${toEditDateValue(record.log_date)}"></td>
+      <td><input type="text" class="edit-name" value="${escapeAttr(record.name)}"></td>
+      <td><input type="text" class="edit-control" value="${escapeAttr(record.control_no)}"></td>
+      <td><input type="text" class="edit-course" value="${escapeAttr(record.course)}"></td>
+      <td><input type="text" class="edit-released" value="${escapeAttr(record.documents_released)}"></td>
+      <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
+      <td><input type="text" class="edit-receipt" value="${escapeAttr(record.receipt_no)}"></td>
+      <td><input type="number" step="0.01" min="0" class="edit-amount" value="${escapeAttr(record.amount)}"></td>
+      <td class="cell-actions">
+        <button class="btn-icon save-btn" title="Save changes" aria-label="Save changes">&#10003;</button>
+        <button class="btn-icon cancel-btn" title="Cancel" aria-label="Cancel">&#10005;</button>
+      </td>
+    `;
+  } else {
+    const deliveryVal = escapeAttr(record.delivery_method || '');
+    tr.innerHTML = `
+      <td><input type="date" class="edit-date" value="${toEditDateValue(record.log_date)}"></td>
+      <td><input type="text" class="edit-name" value="${escapeAttr(record.name)}"></td>
+      <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
+      <td><input type="text" class="edit-school" value="${escapeAttr(record.school || '')}"></td>
+      <td>
+        <select class="edit-delivery">
+          <option value="Hand Carry" ${deliveryVal === 'Hand Carry' ? 'selected' : ''}>Hand Carry</option>
+          <option value="Mailed" ${deliveryVal === 'Mailed' ? 'selected' : ''}>Mailed</option>
+        </select>
+      </td>
+      <td class="cell-actions">
+        <button class="btn-icon save-btn" title="Save changes" aria-label="Save changes">&#10003;</button>
+        <button class="btn-icon cancel-btn" title="Cancel" aria-label="Cancel">&#10005;</button>
+      </td>
+    `;
+  }
+
   tr.querySelector('.save-btn').addEventListener('click', () => saveEdit(tr, id));
-  tr.querySelector('.cancel-btn').addEventListener('click', () => renderTable());
+  tr.querySelector('.cancel-btn').addEventListener('click', () => {
+    renderTable();
+  });
 }
 
 function collectFields(scope) {
@@ -302,16 +404,27 @@ function collectFields(scope) {
     purpose: get('.edit-purpose, #newPurpose')?.value.trim(),
     receipt_no: get('.edit-receipt, #newReceiptNo')?.value.trim(),
     amount: get('.edit-amount, #newAmount')?.value,
+    school: get('.edit-school, #newSchool')?.value.trim(),
+    delivery_method: get('.edit-delivery, #newDelivery')?.value.trim(),
   };
 }
 
 function fieldsAreValid(f) {
-  if (!f.log_date || !f.name || !f.control_no || !f.course || !f.documents_released || !f.purpose || !f.receipt_no) {
-    return 'All fields are required.';
+  if (currentCategory === 'tor') {
+    if (!f.log_date || !f.name || !f.control_no || !f.course || !f.documents_released || !f.purpose || !f.receipt_no) {
+      return 'All TOR fields are required (Date, Name, Control No., Course, Documents Released, Purpose, Receipt No.).';
+    }
+  } else {
+    if (!f.log_date || !f.name || !f.purpose || !f.school || !f.delivery_method) {
+      return 'All Mailing fields are required (Date, Name, Purpose, School, Delivery Method).';
+    }
   }
-  const amount = Number(f.amount);
-  if (f.amount === '' || f.amount === undefined || Number.isNaN(amount) || amount < 0) {
-    return 'Amount must be a valid number (0 or more).';
+
+  if (f.amount && f.amount !== '' && f.amount !== undefined) {
+    const amount = Number(f.amount);
+    if (Number.isNaN(amount) || amount < 0) {
+      return 'Amount must be a valid number (0 or more).';
+    }
   }
   return null;
 }
@@ -325,10 +438,16 @@ async function saveEdit(tr, id) {
   }
 
   try {
+    const payload = {
+      ...fields,
+      category: currentCategory,
+      amount: fields.amount ? Number(fields.amount) : 0,
+    };
+
     const res = await fetch(`${API_BASE}/records?id=${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...fields, amount: Number(fields.amount) }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (res.status === 401) return forceLogout('Session expired. Please log in again.');
@@ -355,6 +474,42 @@ async function deleteRecord(id) {
   } catch (err) {
     setStatus(`Could not delete entry: ${err.message}`, true);
   }
+}
+
+// --- Tab switching ---
+function setupTabs() {
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const newCat = btn.dataset.tab;
+      if (newCat === currentCategory) return;
+
+      currentCategory = newCat;
+
+      // Update active states
+      tabButtons.forEach((b) => {
+        const isActive = b.dataset.tab === newCat;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive);
+      });
+
+      updateCategoryUI();
+
+      // Immediately clear old records and show the correct empty message for the new section
+      // (prevents stale "TOR logbook" message from showing in Mailing tab, etc.)
+      els.tableBody.innerHTML = '';
+      const sectionName = newCat === 'tor' ? 'TOR' : 'Mailing';
+      els.emptyState.textContent = `No entries yet in the ${sectionName} logbook.`;
+      els.emptyState.classList.remove('hidden');
+
+      // Reset search + page when switching sections
+      searchTerm = '';
+      if (els.searchInput) els.searchInput.value = '';
+      currentPage = 1;
+
+      fetchRecords();
+    });
+  });
 }
 
 // --- Login modal ---
@@ -404,11 +559,15 @@ els.logoutBtn.addEventListener('click', () => {
   setStatus('Logged out.');
 });
 
-// --- Export to Excel (exports ALL matching records, not just the current page) ---
+// --- Export to Excel (exports ALL matching records for current category) ---
 els.exportBtn.addEventListener('click', async () => {
   setStatus('Preparing export…');
   try {
-    const params = new URLSearchParams({ page: '1', pageSize: '2000' });
+    const params = new URLSearchParams({
+      page: '1',
+      pageSize: '2000',
+      category: currentCategory,
+    });
     if (searchTerm) params.set('search', searchTerm);
 
     const res = await fetch(`${API_BASE}/records?${params.toString()}`);
@@ -420,26 +579,43 @@ els.exportBtn.addEventListener('click', async () => {
       return;
     }
 
-    const rows = data.records.map((r) => ({
-      'Date & Time': formatDate(r.log_date),
-      Name: r.name,
-      'Control Number': r.control_no,
-      Course: r.course,
-      'Documents Released': r.documents_released,
-      Purpose: r.purpose,
-      'Receipt Number': r.receipt_no,
-      Amount: Number(r.amount),
-    }));
+    let rows;
+    if (currentCategory === 'tor') {
+      rows = data.records.map((r) => ({
+        'Date': formatDate(r.log_date),
+        'Name': r.name,
+        'Control Number': r.control_no,
+        'Course': r.course,
+        'Documents Released': r.documents_released,
+        'Purpose': r.purpose,
+        'Receipt Number': r.receipt_no,
+        'Amount': Number(r.amount),
+      }));
+    } else {
+      rows = data.records.map((r) => ({
+        'Date': formatDate(r.log_date),
+        'Name': r.name,
+        'Purpose': r.purpose,
+        'School / Destination': r.school,
+        'Delivery Method': r.delivery_method,
+      }));
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
-    worksheet['!cols'] = [
-      { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 18 },
-      { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 12 },
-    ];
+    worksheet['!cols'] = currentCategory === 'tor'
+      ? [
+          { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 20 },
+          { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 10 },
+        ]
+      : [
+          { wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 26 }, { wch: 16 },
+        ];
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Logbook');
+    XLSX.utils.book_append_sheet(workbook, worksheet, currentCategory === 'tor' ? 'TOR Logbook' : 'Mailing Logbook');
     const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `logbook-export-${stamp}.xlsx`);
+    const filename = currentCategory === 'tor' ? `tor-logbook-export-${stamp}.xlsx` : `mailing-logbook-export-${stamp}.xlsx`;
+    XLSX.writeFile(workbook, filename);
     setStatus('Excel file downloaded.');
   } catch (err) {
     setStatus(`Could not export: ${err.message}`, true);
@@ -467,19 +643,25 @@ els.addForm.addEventListener('submit', async (e) => {
   }
 
   try {
+    const payload = {
+      ...fields,
+      category: currentCategory,
+      amount: fields.amount ? Number(fields.amount) : 0,
+    };
+
     const res = await fetch(`${API_BASE}/records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...fields, amount: Number(fields.amount) }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (res.status === 401) return forceLogout('Session expired. Please log in again.');
     if (!res.ok) throw new Error(data.error || 'Failed to add entry');
 
     els.addForm.reset();
-    els.newDate.value = toDatetimeInputValue();
+    els.newDate.value = toDateInputValue();
     setStatus('Entry added.');
-    currentPage = 1; // newest entries sort first, so jump back to page 1
+    currentPage = 1;
     await fetchRecords();
   } catch (err) {
     setStatus(`Could not add entry: ${err.message}`, true);
@@ -500,6 +682,13 @@ els.tableBody.addEventListener('click', (e) => {
 });
 
 // --- Init ---
-els.newDate.value = toDatetimeInputValue();
-updateModeUI();
-fetchRecords();
+function init() {
+  currentCategory = 'tor';
+  els.newDate.value = toDateInputValue();
+  setupTabs();
+  updateCategoryUI();
+  updateModeUI();
+  fetchRecords();
+}
+
+init();
