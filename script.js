@@ -188,8 +188,9 @@ function updateTableHeaders() {
     els.tableHeadRow.innerHTML = `
       <th class="col-date">Date</th>
       <th class="col-name">Name</th>
-      <th class="col-purpose">Purpose</th>
+      <th class="col-course">Course</th>
       <th class="col-school">School</th>
+      <th class="col-purpose">Purpose</th>
       <th class="col-delivery">Delivery Method</th>
       ${showActions ? `<th class="col-actions">Actions</th>` : ''}
     `;
@@ -221,7 +222,7 @@ function updateCategoryUI() {
   if (els.searchInput) {
     els.searchInput.placeholder = currentCategory === 'tor'
       ? 'Search by name, control no., course, document, purpose, receipt no., or amount'
-      : 'Search by name, purpose, school, or delivery method';
+      : 'Search by name, course, school, purpose, or delivery method';
   }
 
   // Update table headers for current category + admin state
@@ -336,8 +337,9 @@ function renderTable() {
       tr.innerHTML = `
         <td class="cell-date cell-mono">${formatDate(r.log_date)}</td>
         <td class="cell-name">${escapeHtml(r.name)}</td>
-        <td>${escapeHtml(r.purpose)}</td>
+        <td>${escapeHtml(r.course || '')}</td>
         <td>${escapeHtml(r.school || '')}</td>
+        <td>${escapeHtml(r.purpose)}</td>
         <td class="cell-mono">${escapeHtml(r.delivery_method || '')}</td>
         ${showActions ? `
         <td class="cell-actions">
@@ -374,8 +376,9 @@ function startEdit(tr, id) {
     tr.innerHTML = `
       <td><input type="date" class="edit-date" value="${toEditDateValue(record.log_date)}"></td>
       <td><input type="text" class="edit-name" value="${escapeAttr(record.name)}"></td>
-      <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
+      <td><input type="text" class="edit-course" value="${escapeAttr(record.course || '')}"></td>
       <td><input type="text" class="edit-school" value="${escapeAttr(record.school || '')}"></td>
+      <td><input type="text" class="edit-purpose" value="${escapeAttr(record.purpose)}"></td>
       <td>
         <select class="edit-delivery">
           <option value="Hand Carry" ${deliveryVal === 'Hand Carry' ? 'selected' : ''}>Hand Carry</option>
@@ -401,7 +404,7 @@ function collectFields(scope) {
     log_date: get('.edit-date, #newDate')?.value,
     name: get('.edit-name, #newName')?.value.trim(),
     control_no: get('.edit-control, #newControlNo')?.value.trim(),
-    course: get('.edit-course, #newCourse')?.value.trim(),
+    course: get('.edit-course, #newCourse, #newMailingCourse')?.value.trim(),
     documents_released: get('.edit-released, #newDocumentsReleased')?.value.trim(),
     purpose: get('.edit-purpose, #newPurpose')?.value.trim(),
     receipt_no: get('.edit-receipt, #newReceiptNo')?.value.trim(),
@@ -417,8 +420,8 @@ function fieldsAreValid(f) {
       return 'All TOR fields are required (Date, Name, Control No., Course, Documents Released, Purpose, Receipt No.).';
     }
   } else {
-    if (!f.log_date || !f.name || !f.purpose || !f.school || !f.delivery_method) {
-      return 'All Mailing fields are required (Date, Name, Purpose, School, Delivery Method).';
+    if (!f.log_date || !f.name || !f.course || !f.school || !f.purpose || !f.delivery_method) {
+      return 'All Mailing fields are required (Date, Name, Course, School, Purpose, Delivery Method).';
     }
   }
 
@@ -597,8 +600,9 @@ els.exportBtn.addEventListener('click', async () => {
       rows = data.records.map((r) => ({
         'Date': formatDate(r.log_date),
         'Name': r.name,
-        'Purpose': r.purpose,
+        'Course': r.course,
         'School / Destination': r.school,
+        'Purpose': r.purpose,
         'Delivery Method': r.delivery_method,
       }));
     }
@@ -610,7 +614,7 @@ els.exportBtn.addEventListener('click', async () => {
           { wch: 24 }, { wch: 24 }, { wch: 16 }, { wch: 10 },
         ]
       : [
-          { wch: 14 }, { wch: 22 }, { wch: 28 }, { wch: 26 }, { wch: 16 },
+          { wch: 14 }, { wch: 22 }, { wch: 22 }, { wch: 26 }, { wch: 28 }, { wch: 16 },
         ];
 
     const workbook = XLSX.utils.book_new();
