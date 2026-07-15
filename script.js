@@ -404,7 +404,7 @@ function collectFields(scope) {
     log_date: get('.edit-date, #newDate')?.value,
     name: get('.edit-name, #newName')?.value.trim(),
     control_no: get('.edit-control, #newControlNo')?.value.trim(),
-    course: get('.edit-course, #newCourse, #newMailingCourse')?.value.trim(),
+    course: (get('.edit-course') || (currentCategory === 'mailing' ? get('#newMailingCourse') : get('#newCourse')))?.value.trim(),
     documents_released: get('.edit-released, #newDocumentsReleased')?.value.trim(),
     purpose: get('.edit-purpose, #newPurpose')?.value.trim(),
     receipt_no: get('.edit-receipt, #newReceiptNo')?.value.trim(),
