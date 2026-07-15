@@ -400,11 +400,22 @@ function startEdit(tr, id) {
 
 function collectFields(scope) {
   const get = (cls) => scope.querySelector(cls);
+  const isEditRow = scope.tagName === 'TR';
+
+  let course;
+  if (isEditRow) {
+    course = get('.edit-course')?.value.trim();
+  } else {
+    course = currentCategory === 'mailing'
+      ? document.getElementById('newMailingCourse')?.value.trim()
+      : document.getElementById('newCourse')?.value.trim();
+  }
+
   return {
     log_date: get('.edit-date, #newDate')?.value,
     name: get('.edit-name, #newName')?.value.trim(),
     control_no: get('.edit-control, #newControlNo')?.value.trim(),
-    course: (get('.edit-course') || (currentCategory === 'mailing' ? get('#newMailingCourse') : get('#newCourse')))?.value.trim(),
+    course,
     documents_released: get('.edit-released, #newDocumentsReleased')?.value.trim(),
     purpose: get('.edit-purpose, #newPurpose')?.value.trim(),
     receipt_no: get('.edit-receipt, #newReceiptNo')?.value.trim(),
